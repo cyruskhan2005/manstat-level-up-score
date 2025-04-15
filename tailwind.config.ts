@@ -61,6 +61,20 @@ export default {
 					'accent-foreground': 'hsl(var(--sidebar-accent-foreground))',
 					border: 'hsl(var(--sidebar-border))',
 					ring: 'hsl(var(--sidebar-ring))'
+				},
+				// ManStat custom colors
+				manstat: {
+					blue: '#4361EE',
+					purple: '#7209B7',
+					pink: '#F72585',
+					cyan: '#4CC9F0',
+					orange: '#FB8500',
+					green: '#06D6A0',
+					yellow: '#FFD60A',
+					red: '#D62828',
+					dark: '#121212',
+					'dark-card': '#1E1E1E',
+					'dark-accent': '#2A2A2A'
 				}
 			},
 			borderRadius: {
