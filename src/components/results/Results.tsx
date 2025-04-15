@@ -10,6 +10,7 @@ import {
   TrendingDown
 } from 'lucide-react';
 import { getCategoryDisplayName } from '@/utils/scoreCalculator';
+import { Category } from '@/types';
 import { 
   BarChart,
   Bar,
@@ -29,7 +30,7 @@ const Results: React.FC = () => {
   }
 
   const categoryData = Object.entries(results.categories).map(([category, data]) => ({
-    name: getCategoryDisplayName(category),
+    name: getCategoryDisplayName(category as Category),
     score: data.score,
     percentile: data.percentile,
     category,
@@ -136,7 +137,7 @@ const Results: React.FC = () => {
             {Object.entries(results.categories).map(([category, data]) => (
               <Card key={category} className="p-4 border-muted/30">
                 <h4 className="font-bold flex items-center gap-2">
-                  {getCategoryDisplayName(category)}
+                  {getCategoryDisplayName(category as Category)}
                   <span className="bg-muted/30 text-sm px-2 py-1 rounded">
                     Score: {data.score}/10
                   </span>

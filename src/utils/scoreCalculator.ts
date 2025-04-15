@@ -18,6 +18,71 @@ const calculatePercentile = (value: number, average: number, isHigherBetter = tr
   return Math.max(1, percentile); // Ensure at least 1 percentile
 };
 
+// Calculate BMI from height and weight
+const calculateBMI = (data: FormData): number | null => {
+  let heightInMeters: number | null = null;
+  let weightInKg: number | null = null;
+  
+  // Get height in meters
+  if (data.height.cm) {
+    heightInMeters = data.height.cm / 100;
+  } else if (data.height.feet && data.height.inches) {
+    // Convert feet/inches to meters: 1 foot = 0.3048 meters, 1 inch = 0.0254 meters
+    heightInMeters = (data.height.feet * 0.3048) + (data.height.inches * 0.0254);
+  }
+  
+  // Get weight in kg
+  if (data.weight.kg) {
+    weightInKg = data.weight.kg;
+  } else if (data.weight.lbs) {
+    // Convert pounds to kg: 1 lb = 0.453592 kg
+    weightInKg = data.weight.lbs * 0.453592;
+  }
+  
+  // Calculate BMI if we have both height and weight
+  if (heightInMeters && weightInKg) {
+    return weightInKg / (heightInMeters * heightInMeters);
+  }
+  
+  return null;
+};
+
+// Evaluate if BMI is ideal (around 22-26 is considered ideal for many men)
+const evaluateBMI = (bmi: number | null): number => {
+  if (!bmi) return 50; // Default to average if no BMI
+  
+  // BMI ranges and corresponding percentiles
+  if (bmi >= 18.5 && bmi < 25) {
+    // Normal weight - highest score
+    return 80;
+  } else if ((bmi >= 17 && bmi < 18.5) || (bmi >= 25 && bmi < 30)) {
+    // Slightly under or overweight
+    return 60;
+  } else if ((bmi >= 16 && bmi < 17) || (bmi >= 30 && bmi < 35)) {
+    // Moderately under or overweight
+    return 40;
+  } else {
+    // Severely under or overweight
+    return 20;
+  }
+};
+
+// Evaluate age factor (prime age for physical performance is typically 25-35)
+const evaluateAgeFactor = (age: number | null): number => {
+  if (!age) return 1.0; // Default to neutral factor
+  
+  // Age adjustment factors:
+  if (age >= 25 && age <= 35) {
+    return 1.1; // Prime physical age gets a boost
+  } else if ((age >= 20 && age < 25) || (age > 35 && age <= 45)) {
+    return 1.0; // Neutral factor
+  } else if ((age >= 18 && age < 20) || (age > 45 && age <= 55)) {
+    return 0.9; // Slight reduction
+  } else {
+    return 0.8; // Larger reduction for ages > 55
+  }
+};
+
 // Calculate score from 1-10 based on percentile
 const percentileToScore = (percentile: number): number => {
   return Math.max(1, Math.min(10, Math.ceil(percentile / 10)));
@@ -29,9 +94,16 @@ const calculateAttractiveness = (data: FormData): CategoryScore => {
   const faceScore = data.facialAttractiveness || 5;
   const styleScore = data.styleGrooming || 5;
   
-  // Combined score weighted slightly more toward facial attractiveness
-  const rawScore = (faceScore * 0.6) + (styleScore * 0.4);
-  const score = Math.round(rawScore);
+  // Calculate BMI influence on attractiveness
+  const bmi = calculateBMI(data);
+  const bmiPercentile = evaluateBMI(bmi);
+  
+  // Age factor - prime attractiveness age is considered to be 25-35
+  const ageFactor = evaluateAgeFactor(data.age);
+  
+  // Combined score weighted with facial attractiveness, style, and physical attributes
+  const rawScore = ((faceScore * 0.5) + (styleScore * 0.3) + (bmiPercentile / 10 * 0.2)) * ageFactor;
+  const score = Math.round(Math.max(1, Math.min(10, rawScore)));
   const percentile = score * 10;
   
   let explanation = '';
@@ -67,9 +139,16 @@ const calculateStrengthFitness = (data: FormData): CategoryScore => {
   const deadliftPercentile = data.maxDeadlift ? 
     calculatePercentile(data.maxDeadlift, NATIONAL_AVERAGES.maxDeadlift) : 50;
   
-  // Average percentile across all fitness metrics
+  // BMI influence
+  const bmi = calculateBMI(data);
+  const bmiPercentile = evaluateBMI(bmi);
+  
+  // Age factor - adjust scores based on age (physical prime is typically 25-35)
+  const ageFactor = evaluateAgeFactor(data.age);
+  
+  // Average percentile across all fitness metrics, including BMI influence
   const avgPercentile = Math.round(
-    (bodyFatPercentile + benchPercentile + squatPercentile + deadliftPercentile) / 4
+    ((bodyFatPercentile + benchPercentile + squatPercentile + deadliftPercentile + bmiPercentile) / 5) * ageFactor
   );
   
   const score = percentileToScore(avgPercentile);
@@ -111,8 +190,21 @@ const calculateIncomeCareer = (data: FormData): CategoryScore => {
   const incomePercentile = data.yearlyIncome ? 
     calculatePercentile(data.yearlyIncome, NATIONAL_AVERAGES.yearlyIncome) : 50;
   
-  // Average percentile across career metrics
-  const avgPercentile = Math.round((educationPercentile + incomePercentile) / 2);
+  // Age consideration - income typically increases with age, so younger people get a boost
+  let ageAdjustment = 1.0;
+  if (data.age) {
+    if (data.age < 25) {
+      ageAdjustment = 1.3; // Significant boost for young achievers
+    } else if (data.age < 30) {
+      ageAdjustment = 1.2; // Good boost for under 30
+    } else if (data.age < 40) {
+      ageAdjustment = 1.1; // Slight boost for 30s
+    }
+    // No adjustment for 40+ as that's when income is expected to be higher
+  }
+  
+  // Average percentile across career metrics with age adjustment
+  const avgPercentile = Math.min(99, Math.round(((educationPercentile + incomePercentile) / 2) * ageAdjustment));
   
   const score = percentileToScore(avgPercentile);
   
@@ -151,8 +243,20 @@ const calculateRelationshipDating = (data: FormData): CategoryScore => {
   const experiencePercentile = data.womenSleptWith ? 
     calculatePercentile(data.womenSleptWith, NATIONAL_AVERAGES.womenSleptWith) : 50;
   
-  // Combined score with relationship status weighted more
-  const avgPercentile = Math.round((relationshipPercentile * 0.7) + (experiencePercentile * 0.3));
+  // Age consideration - expectations of relationship status change with age
+  let ageAdjustment = 1.0;
+  if (data.age) {
+    if (data.age < 25) {
+      // Less expectation to be in serious relationships when younger
+      ageAdjustment = 1.2;
+    } else if (data.age > 35 && data.relationshipStatus === 'Single') {
+      // Higher expectation to be in relationships when older
+      ageAdjustment = 0.8;
+    }
+  }
+  
+  // Combined score with relationship status weighted more, adjusted for age
+  const avgPercentile = Math.round(((relationshipPercentile * 0.7) + (experiencePercentile * 0.3)) * ageAdjustment);
   
   const score = percentileToScore(avgPercentile);
   
@@ -185,8 +289,20 @@ const calculateSocialLife = (data: FormData): CategoryScore => {
   const eventsPercentile = data.socialEventsPerMonth ? 
     calculatePercentile(data.socialEventsPerMonth, NATIONAL_AVERAGES.socialEventsPerMonth) : 50;
   
+  // Age consideration - social expectations vary by age
+  let ageAdjustment = 1.0;
+  if (data.age) {
+    if (data.age < 25) {
+      // Higher social expectations for younger men
+      ageAdjustment = 0.9;
+    } else if (data.age > 40) {
+      // Lower social expectations for older men
+      ageAdjustment = 1.1;
+    }
+  }
+  
   // Average percentile across social metrics
-  const avgPercentile = Math.round((friendsPercentile + eventsPercentile) / 2);
+  const avgPercentile = Math.round(((friendsPercentile + eventsPercentile) / 2) * ageAdjustment);
   
   const score = percentileToScore(avgPercentile);
   
@@ -216,14 +332,28 @@ const calculateLifestyle = (data: FormData): CategoryScore => {
   const hasLifestyleNotes = data.lifestyleNotes && data.lifestyleNotes.trim().length > 10;
   const notesLength = data.lifestyleNotes ? data.lifestyleNotes.length : 0;
   
-  // Simple heuristic - more detailed notes correlate with more developed lifestyle
-  const percentile = hasLifestyleNotes ? Math.min(40 + Math.floor(notesLength / 10), 90) : 50;
+  // Age consideration - lifestyle expectations change with age
+  let ageAdjustment = 1.0;
+  if (data.age) {
+    if (data.age < 25) {
+      // Less expectation for an established lifestyle when younger
+      ageAdjustment = 1.2;
+    } else if (data.age > 40) {
+      // Higher expectation for an established lifestyle when older
+      ageAdjustment = 0.9;
+    }
+  }
   
-  const score = percentileToScore(percentile);
+  // Simple heuristic - more detailed notes correlate with more developed lifestyle
+  const percentile = hasLifestyleNotes ? 
+    Math.min(40 + Math.floor(notesLength / 10), 90) * ageAdjustment : 
+    50 * ageAdjustment;
+  
+  const score = percentileToScore(Math.round(percentile));
   
   return {
     score,
-    percentile,
+    percentile: Math.round(percentile),
     explanation: "Lifestyle score is based on the richness and diversity of your interests and habits.",
     levelUpTip: getRandomTip('lifestyle')
   };
@@ -305,5 +435,7 @@ export const getCategoryDisplayName = (category: Category): string => {
       return 'Social Life';
     case 'lifestyle':
       return 'Lifestyle';
+    default:
+      return category;
   }
 };
