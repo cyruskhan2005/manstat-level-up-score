@@ -31,11 +31,15 @@ const defaultFormData: FormData = {
   closeFreinds: null,
   socialEventsPerMonth: null,
   
-  // Self Rating
+  // Self Rating - now with additional facial features
   facialAttractiveness: 5,
   styleGrooming: 5,
+  facialSymmetry: 5,
+  jawlineDefinition: 5,
+  attentionFromWomen: 5,
+  complimentsReceived: 'occasionally',
   
-  // Lifestyle - initialized as empty array for hobbies
+  // Lifestyle
   livingSituation: '',
   exerciseFrequency: '',
   hobbies: [],

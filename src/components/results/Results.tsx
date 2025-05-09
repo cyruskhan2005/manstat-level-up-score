@@ -48,6 +48,22 @@ const Results: React.FC = () => {
     return '#9b87f5'; // Default purple
   };
 
+  const getScoreGrade = (score: number) => {
+    if (score >= 90) return 'A+';
+    if (score >= 85) return 'A';
+    if (score >= 80) return 'A-';
+    if (score >= 75) return 'B+';
+    if (score >= 70) return 'B';
+    if (score >= 65) return 'B-';
+    if (score >= 60) return 'C+';
+    if (score >= 55) return 'C';
+    if (score >= 50) return 'C-';
+    if (score >= 45) return 'D+';
+    if (score >= 40) return 'D';
+    if (score >= 35) return 'D-';
+    return 'F';
+  };
+
   const ageGroup = formData.age ? 
     formData.age < 25 ? "your early 20s" :
     formData.age < 35 ? "your prime years" :
@@ -64,6 +80,7 @@ const Results: React.FC = () => {
             <div className="bg-muted/30 p-4 rounded-lg text-center">
               <div className="text-5xl font-bold gradient-text">{results.overallScore}</div>
               <div className="text-sm text-muted-foreground">Overall Score</div>
+              <div className="text-lg font-semibold mt-1">{getScoreGrade(results.overallScore)}</div>
             </div>
             <div>
               <p className="text-xl mb-2">
@@ -88,7 +105,7 @@ const Results: React.FC = () => {
                 margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
               >
                 <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                <XAxis type="number" domain={[0, 10]} />
+                <XAxis type="number" domain={[0, 100]} />
                 <YAxis 
                   dataKey="name" 
                   type="category" 
@@ -98,11 +115,11 @@ const Results: React.FC = () => {
                 <Tooltip 
                   formatter={(value, name, props) => {
                     const { percentile } = props.payload;
-                    return [`Score: ${value}/10 (Top ${100 - percentile}%)`, ''];
+                    return [`Score: ${value}/100 (Top ${100 - percentile}%)`, ''];
                   }}
                   labelFormatter={(label) => label}
                 />
-                <ReferenceLine x={5} stroke="#666" strokeDasharray="3 3" label={{ value: 'Average', position: 'insideBottomRight', fill: '#666' }} />
+                <ReferenceLine x={50} stroke="#666" strokeDasharray="3 3" label={{ value: 'Average', position: 'insideBottomRight', fill: '#666' }} />
                 <Bar dataKey="score" minPointSize={2} barSize={20}>
                   {categoryData.map((entry, index) => (
                     <Cell 
@@ -125,7 +142,7 @@ const Results: React.FC = () => {
                 {results.categories[results.strongestCategory].explanation}
                 {' '}
                 <span className="font-medium">
-                  (Top {100 - results.categories[results.strongestCategory].percentile}%)
+                  (Score: {results.categories[results.strongestCategory].score}/100, Grade: {getScoreGrade(results.categories[results.strongestCategory].score)})
                 </span>
               </p>
             </div>
@@ -139,7 +156,7 @@ const Results: React.FC = () => {
                 {results.categories[results.weakestCategory].explanation}
                 {' '}
                 <span className="font-medium">
-                  (Top {100 - results.categories[results.weakestCategory].percentile}%)
+                  (Score: {results.categories[results.weakestCategory].score}/100, Grade: {getScoreGrade(results.categories[results.weakestCategory].score)})
                 </span>
               </p>
             </div>
@@ -169,10 +186,10 @@ const Results: React.FC = () => {
                   {getCategoryDisplayName(category as Category)}
                   <div className="flex items-center gap-1">
                     <span className="bg-muted/30 text-sm px-2 py-1 rounded">
-                      {data.score}/10
+                      {data.score}/100
                     </span>
                     <span className="text-xs text-muted-foreground">
-                      Top {100 - data.percentile}%
+                      Grade: {getScoreGrade(data.score)}
                     </span>
                   </div>
                 </h4>

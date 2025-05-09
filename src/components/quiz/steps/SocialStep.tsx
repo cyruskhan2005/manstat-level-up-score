@@ -40,6 +40,38 @@ const SocialStep: React.FC = () => {
     updateField('socialEventsPerMonth', value);
   };
   
+  // Get age-appropriate relationship context text
+  const getRelationshipContextText = () => {
+    if (!formData.age) return "For reference: The average adult male has ~7 lifetime partners";
+    
+    if (formData.age < 25) {
+      return "Being single or dating casually is very normal at your age";
+    } else if (formData.age < 35) {
+      return "At this age, men typically have had 5-10 partners and many are in relationships";
+    } else if (formData.age < 45) {
+      return "By this age, most men are in long-term relationships or married";
+    } else {
+      return "At this stage of life, stable relationships are the norm for most men";
+    }
+  };
+  
+  // Get age-appropriate partners context text
+  const getPartnersContextText = () => {
+    if (!formData.age) return "For reference: The average adult male has ~7 lifetime partners";
+    
+    if (formData.age < 21) {
+      return "For reference: Men your age have typically had 0-3 partners";
+    } else if (formData.age < 25) {
+      return "For reference: Men your age have typically had 1-5 partners";
+    } else if (formData.age < 35) {
+      return "For reference: Men your age have typically had 5-10 partners";
+    } else if (formData.age < 45) {
+      return "For reference: Men your age have typically had 7-14 partners";
+    } else {
+      return "For reference: Men your age have typically had 10+ lifetime partners";
+    }
+  };
+  
   return (
     <div className="space-y-6">
       <div>
@@ -65,6 +97,9 @@ const SocialStep: React.FC = () => {
               ))}
             </SelectContent>
           </Select>
+          <p className="text-xs text-muted-foreground mt-1">
+            {getRelationshipContextText()}
+          </p>
         </div>
         
         <div className="space-y-2">
@@ -79,7 +114,7 @@ const SocialStep: React.FC = () => {
             onChange={handleWomenSleptWithChange}
           />
           <p className="text-xs text-muted-foreground">
-            For reference: The average adult male has ~7 lifetime partners
+            {getPartnersContextText()}
           </p>
         </div>
         

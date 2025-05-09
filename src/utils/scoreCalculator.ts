@@ -202,16 +202,29 @@ const evaluateAgeFactor = (age: number | null): number => {
   }
 };
 
-// Calculate score from 1-10 based on percentile
+// Calculate score from 1-100 based on percentile (now directly using the percentile)
 const percentileToScore = (percentile: number): number => {
-  return Math.max(1, Math.min(10, Math.ceil(percentile / 10)));
+  return Math.max(1, Math.min(100, percentile));
 };
 
-// Calculate attractiveness score
+// Calculate attractiveness score with new facial features
 const calculateAttractiveness = (data: FormData): CategoryScore => {
-  // Self rated attractiveness and style are direct inputs
+  // Self rated attractiveness and features
   const faceScore = data.facialAttractiveness || 5;
   const styleScore = data.styleGrooming || 5;
+  const symmetryScore = data.facialSymmetry || 5;
+  const jawlineScore = data.jawlineDefinition || 5;
+  const attentionScore = data.attentionFromWomen || 5;
+  
+  // Map compliments frequency to a numeric score
+  const complimentMap: Record<string, number> = {
+    'very frequently': 10,
+    'frequently': 8,
+    'occasionally': 5,
+    'rarely': 3,
+    'never': 1,
+  };
+  const complimentsScore = complimentMap[data.complimentsReceived] || 5;
   
   // Calculate BMI influence on attractiveness
   const bmi = calculateBMI(data);
@@ -220,17 +233,28 @@ const calculateAttractiveness = (data: FormData): CategoryScore => {
   // Age factor - prime attractiveness age is considered to be 25-35
   const ageFactor = evaluateAgeFactor(data.age);
   
-  // Combined score weighted with facial attractiveness, style, and physical attributes
-  const rawScore = ((faceScore * 0.5) + (styleScore * 0.3) + (bmiPercentile / 10 * 0.2)) * ageFactor;
-  const score = Math.round(Math.max(1, Math.min(10, rawScore)));
-  const percentile = score * 10;
+  // Combined score weighted with facial attractiveness, style, features and external validation
+  const rawPercentile = 
+    (faceScore * 10 * 0.2) + // 20% overall face
+    (symmetryScore * 10 * 0.1) + // 10% facial symmetry
+    (jawlineScore * 10 * 0.1) + // 10% jawline
+    (styleScore * 10 * 0.15) + // 15% style
+    (attentionScore * 10 * 0.25) + // 25% external attention
+    (complimentsScore * 10 * 0.1) + // 10% compliments
+    (bmiPercentile * 0.1); // 10% physical composition
+  
+  // Apply age factor
+  const percentile = Math.min(99, Math.round(rawPercentile * ageFactor));
+  
+  // Score is now directly the percentile, capped at 100
+  const score = percentileToScore(percentile);
   
   let explanation = '';
-  if (score >= 8) {
+  if (score >= 80) {
     explanation = "You're in the top tier of physical attractiveness, with strong facial features and excellent style.";
-  } else if (score >= 6) {
+  } else if (score >= 60) {
     explanation = "You're above average in attractiveness with good style choices that complement your features.";
-  } else if (score >= 4) {
+  } else if (score >= 40) {
     explanation = "You have average attractiveness, with room to optimize your style and grooming.";
   } else {
     explanation = "Your self-assessment suggests opportunities to improve your styling and grooming routine.";
@@ -291,14 +315,15 @@ const calculateStrengthFitness = (data: FormData): CategoryScore => {
     ((bodyFatPercentile + benchPercentile + squatPercentile + deadliftPercentile + bmiPercentile) / 5) * ageFactor
   );
   
+  // Score is now directly the percentile, capped at 100
   const score = percentileToScore(avgPercentile);
   
   let explanation = '';
-  if (score >= 8) {
+  if (score >= 80) {
     explanation = "You're significantly stronger than average with excellent body composition.";
-  } else if (score >= 6) {
+  } else if (score >= 60) {
     explanation = "You're stronger than most men and have above-average fitness levels.";
-  } else if (score >= 4) {
+  } else if (score >= 40) {
     explanation = "You have average strength and fitness compared to other men.";
   } else {
     explanation = "Your strength metrics indicate room for improvement in your fitness regimen.";
@@ -369,14 +394,15 @@ const calculateIncomeCareer = (data: FormData): CategoryScore => {
   // Average percentile across career metrics with age adjustment
   const avgPercentile = Math.min(99, Math.round((educationPercentile + incomePercentile) / 2));
   
+  // Score is now directly the percentile, capped at 100
   const score = percentileToScore(avgPercentile);
   
   let explanation = '';
-  if (score >= 8) {
+  if (score >= 80) {
     explanation = "Your income and career achievements put you in the top tier professionally.";
-  } else if (score >= 6) {
+  } else if (score >= 60) {
     explanation = "You're doing better than average in your professional life and earnings.";
-  } else if (score >= 4) {
+  } else if (score >= 40) {
     explanation = "Your career metrics are on par with the average man in your country.";
   } else {
     explanation = "There's significant room for growth in your professional development and earning potential.";
@@ -390,65 +416,142 @@ const calculateIncomeCareer = (data: FormData): CategoryScore => {
   };
 };
 
-// Calculate relationship & dating score with better age normalization
+// Calculate relationship & dating score with stronger age normalization
 const calculateRelationshipDating = (data: FormData): CategoryScore => {
-  // Relationship status score
-  const relationshipMap: Record<string, number> = {
-    'Single': 40,
-    'Dating': 60,
-    'Long-term Relationship': 75,
-    'Married': 85
-  };
+  // Relationship status score with strong age adjustment
+  let relationshipScore = 0;
+  switch (data.relationshipStatus) {
+    case 'Single':
+      relationshipScore = 40;
+      break;
+    case 'Dating':
+      relationshipScore = 60;
+      break;
+    case 'Long-term Relationship':
+      relationshipScore = 75;
+      break;
+    case 'Married':
+      relationshipScore = 85;
+      break;
+    default:
+      relationshipScore = 50;
+  }
   
-  const relationshipPercentile = relationshipMap[data.relationshipStatus] || 50;
+  // Apply much stronger age-adjustment factor for relationship status
+  if (data.age) {
+    if (data.age < 22) {
+      // Very young - being single is perfectly normal
+      if (data.relationshipStatus === 'Single') {
+        relationshipScore = 75; // Almost no penalty for being single
+      } else if (data.relationshipStatus === 'Married') {
+        relationshipScore = 60; // Being married very young isn't necessarily optimal
+      }
+    } else if (data.age < 25) {
+      // Young - being single is still normal
+      if (data.relationshipStatus === 'Single') {
+        relationshipScore = 65;
+      }
+    } else if (data.age >= 25 && data.age < 35) {
+      // Prime dating/relationship age - normal expectations
+      // No adjustment
+    } else if (data.age >= 35 && data.age < 45) {
+      // Mid-life - stronger expectations for stable relationships
+      if (data.relationshipStatus === 'Single') {
+        relationshipScore = 30;
+      } else if (data.relationshipStatus === 'Dating') {
+        relationshipScore = 45;
+      }
+    } else {
+      // Older - very strong expectations for stable relationships
+      if (data.relationshipStatus === 'Single') {
+        relationshipScore = 20;
+      } else if (data.relationshipStatus === 'Dating') {
+        relationshipScore = 35;
+      }
+    }
+  }
   
-  // Dating history score with age normalization
-  let experiencePercentile = 50; // Default value
+  // Dating history score with enhanced age normalization
+  let experienceScore = 50; // Default value
   
   if (data.womenSleptWith !== null) {
-    // Base calculation
-    const baseExperiencePercentile = calculatePercentile(data.womenSleptWith, NATIONAL_AVERAGES.womenSleptWith);
+    // Base score based on number relative to average
+    const avgPartners = NATIONAL_AVERAGES.womenSleptWith;
+    const ratio = data.womenSleptWith / avgPartners;
     
     // Apply age normalization
     if (data.age) {
-      if (data.age < 25) {
-        // Younger men - higher expectations for fewer partners
-        experiencePercentile = baseExperiencePercentile * 1.2;
-      } else if (data.age >= 25 && data.age < 40) {
-        // Prime dating age - neutral
-        experiencePercentile = baseExperiencePercentile;
+      if (data.age < 22) {
+        // Very young - low expectations
+        if (data.womenSleptWith === 0) {
+          experienceScore = 50; // No major penalty for zero at very young age
+        } else if (ratio < 0.5) {
+          experienceScore = 60;
+        } else if (ratio <= 1.5) {
+          experienceScore = 75;
+        } else {
+          experienceScore = 85; // Above average at young age is impressive
+        }
+      } else if (data.age < 30) {
+        // Young adult
+        if (data.womenSleptWith === 0) {
+          experienceScore = 30; // Some penalty for zero at this age
+        } else if (ratio < 0.5) {
+          experienceScore = 50;
+        } else if (ratio <= 1.5) {
+          experienceScore = 70;
+        } else {
+          experienceScore = 80;
+        }
+      } else if (data.age < 45) {
+        // Middle-aged
+        if (data.womenSleptWith === 0) {
+          experienceScore = 15; // Significant penalty for zero at this age
+        } else if (ratio < 0.5) {
+          experienceScore = 35;
+        } else if (ratio <= 1.5) {
+          experienceScore = 65;
+        } else {
+          experienceScore = 75;
+        }
       } else {
-        // Older men - lower expectations for more partners
-        experiencePercentile = baseExperiencePercentile * 0.9;
+        // Older
+        if (data.womenSleptWith === 0) {
+          experienceScore = 10; // Major penalty for zero at this age
+        } else if (ratio < 0.5) {
+          experienceScore = 30;
+        } else if (ratio <= 1.5) {
+          experienceScore = 60;
+        } else {
+          experienceScore = 70;
+        }
       }
     } else {
-      experiencePercentile = baseExperiencePercentile;
+      // No age provided, use basic ratio
+      if (data.womenSleptWith === 0) {
+        experienceScore = 30;
+      } else if (ratio < 0.5) {
+        experienceScore = 45;
+      } else if (ratio <= 1.5) {
+        experienceScore = 65;
+      } else {
+        experienceScore = 75;
+      }
     }
   }
   
-  // Age consideration for relationship status
-  let relationshipAgeFactor = 1.0;
-  if (data.age) {
-    if (data.age < 25) {
-      // Less expectation to be in serious relationships when younger
-      relationshipAgeFactor = 1.2;
-    } else if (data.age > 35 && data.relationshipStatus === 'Single') {
-      // Higher expectation to be in relationships when older
-      relationshipAgeFactor = 0.8;
-    }
-  }
+  // Combined score with relationship status weighted more
+  const percentile = Math.min(99, Math.round((relationshipScore * 0.7) + (experienceScore * 0.3)));
   
-  // Combined score with relationship status weighted more, adjusted for age
-  const avgPercentile = Math.round(((relationshipPercentile * 0.7 * relationshipAgeFactor) + (experiencePercentile * 0.3)));
-  
-  const score = percentileToScore(avgPercentile);
+  // Score is now directly the percentile, capped at 100
+  const score = percentileToScore(percentile);
   
   let explanation = '';
-  if (score >= 8) {
+  if (score >= 80) {
     explanation = "You have exceptional relationship and dating success compared to most men.";
-  } else if (score >= 6) {
+  } else if (score >= 60) {
     explanation = "Your relationship and dating life is above average, with good romantic prospects.";
-  } else if (score >= 4) {
+  } else if (score >= 40) {
     explanation = "You have an average dating and relationship history compared to other men.";
   } else {
     explanation = "Your dating history suggests opportunities for improving your relationship outcomes.";
@@ -456,7 +559,7 @@ const calculateRelationshipDating = (data: FormData): CategoryScore => {
   
   return {
     score,
-    percentile: avgPercentile,
+    percentile,
     explanation,
     levelUpTip: getRandomTip('relationshipDating')
   };
@@ -511,14 +614,15 @@ const calculateSocialLife = (data: FormData): CategoryScore => {
   // Average percentile across social metrics
   const avgPercentile = Math.round((friendsPercentile + eventsPercentile) / 2);
   
+  // Score is now directly the percentile, capped at 100
   const score = percentileToScore(avgPercentile);
   
   let explanation = '';
-  if (score >= 8) {
+  if (score >= 80) {
     explanation = "You have an exceptionally strong social network and active social calendar.";
-  } else if (score >= 6) {
+  } else if (score >= 60) {
     explanation = "Your social life is above average, with a solid friend group and regular social activities.";
-  } else if (score >= 4) {
+  } else if (score >= 40) {
     explanation = "You maintain an average social life compared to most men.";
   } else {
     explanation = "Your social connections could benefit from more active relationship building.";
@@ -578,7 +682,7 @@ const calculateHobbyQualityScore = (hobbies: string[]): number => {
   return validHobbies > 0 ? totalScore / validHobbies : 50;
 };
 
-// Calculate lifestyle score with the new structured options
+// Calculate lifestyle score with the structured options
 const calculateLifestyle = (data: FormData): CategoryScore => {
   // Scoring based on structured lifestyle options
   let livingSituationScore = 0;
@@ -685,14 +789,15 @@ const calculateLifestyle = (data: FormData): CategoryScore => {
     ((livingSituationScore * 0.25) + (exerciseScore * 0.25) + (hobbyScore * 0.3) + (carScore * 0.2)) * ageAdjustment
   ));
   
+  // Score is now directly the percentile, capped at 100
   const score = percentileToScore(percentile);
   
   let explanation;
-  if (score >= 8) {
+  if (score >= 80) {
     explanation = "Your lifestyle choices and habits are excellent, placing you at the top tier.";
-  } else if (score >= 6) {
+  } else if (score >= 60) {
     explanation = "You maintain an above-average lifestyle with solid life choices.";
-  } else if (score >= 4) {
+  } else if (score >= 40) {
     explanation = "Your lifestyle is comparable to the average man.";
   } else {
     explanation = "Your lifestyle shows room for improvement in several key areas.";
@@ -726,13 +831,12 @@ export const calculateResults = (data: FormData): Results => {
     lifestyle
   };
   
-  // Calculate overall score
-  const scores = Object.values(categories).map(cat => cat.score);
-  const overallScore = Math.round(scores.reduce((sum, score) => sum + score, 0) / scores.length);
-  
   // Calculate overall percentile
   const percentiles = Object.values(categories).map(cat => cat.percentile);
   const overallPercentile = Math.round(percentiles.reduce((sum, percentile) => sum + percentile, 0) / percentiles.length);
+  
+  // Calculate overall score - now directly based on percentile, 1-100 scale
+  const overallScore = percentileToScore(overallPercentile);
   
   // Find strongest and weakest categories
   const categoryEntries = Object.entries(categories) as [Category, CategoryScore][];
@@ -743,11 +847,11 @@ export const calculateResults = (data: FormData): Results => {
   
   // Generate summary
   let summary = "";
-  if (overallScore >= 8) {
+  if (overallScore >= 80) {
     summary = `You're in the top tier of men overall, with exceptional results across most categories.`;
-  } else if (overallScore >= 6) {
+  } else if (overallScore >= 60) {
     summary = `You're above average compared to most men, with solid performance in multiple areas.`;
-  } else if (overallScore >= 4) {
+  } else if (overallScore >= 40) {
     summary = `You're on par with the average man, with a balanced mix of strengths and areas for improvement.`;
   } else {
     summary = `Your current stats show room for growth across several key areas of manhood.`;

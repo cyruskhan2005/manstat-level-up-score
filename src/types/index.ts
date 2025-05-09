@@ -26,14 +26,18 @@ export type FormData = {
   closeFreinds: number | null;
   socialEventsPerMonth: number | null;
   
-  // Self Rating
+  // Self Rating - extended with new facial features
   facialAttractiveness: number;
   styleGrooming: number;
+  facialSymmetry: number;
+  jawlineDefinition: number;
+  attentionFromWomen: number;
+  complimentsReceived: string;
   
-  // Lifestyle - updated to include ranked hobbies
+  // Lifestyle
   livingSituation: string;
   exerciseFrequency: string;
-  hobbies: string[]; // Array of top 3 hobbies instead of single string
+  hobbies: string[]; // Array of top 3 hobbies
   carOwnership: string;
 };
 
@@ -47,15 +51,15 @@ export type Category =
   | 'lifestyle';
 
 export type CategoryScore = {
-  score: number; // 1-10
+  score: number; // 1-100
   percentile: number; // 0-100
   explanation: string;
   levelUpTip: string;
 };
 
 export type Results = {
-  overallScore: number;
-  percentile: number;
+  overallScore: number; // now 1-100
+  percentile: number; // 0-100
   strongestCategory: Category;
   weakestCategory: Category;
   categories: Record<Category, CategoryScore>;
