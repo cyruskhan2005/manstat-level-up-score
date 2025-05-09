@@ -1,4 +1,3 @@
-
 import { FormData, Results, Category, CategoryScore } from "../types";
 import { NATIONAL_AVERAGES, getRandomTip } from "../constants";
 
@@ -247,6 +246,7 @@ const calculateIncomeCareer = (data: FormData): CategoryScore => {
   const educationMap: Record<string, number> = {
     'High School': 30,
     'Some College': 45,
+    'In College': data.age && data.age < 25 ? 65 : 50, // Boost for younger students
     'Associate Degree': 60,
     'Bachelor\'s Degree': 75,
     'Master\'s Degree': 85,
@@ -264,7 +264,10 @@ const calculateIncomeCareer = (data: FormData): CategoryScore => {
     
     // Apply age-specific normalization
     if (data.age) {
-      if (data.age < 25) {
+      if (data.age < 22) {
+        // Very young professionals or students get a significant boost
+        incomePercentile = Math.min(99, Math.round(baseIncomePercentile * 2.0));
+      } else if (data.age < 25) {
         // Young professionals get a significant boost
         incomePercentile = Math.min(99, Math.round(baseIncomePercentile * 1.5));
       } else if (data.age < 30) {
@@ -283,6 +286,12 @@ const calculateIncomeCareer = (data: FormData): CategoryScore => {
     } else {
       incomePercentile = baseIncomePercentile;
     }
+  }
+  
+  // Educational context adjustment - being in college affects income expectations
+  if (data.educationLevel === 'In College' && data.age && data.age < 25) {
+    // For college students under 25, income expectations are much lower
+    incomePercentile = Math.min(99, Math.round(incomePercentile * 1.5));
   }
   
   // Average percentile across career metrics with age adjustment
@@ -451,12 +460,89 @@ const calculateSocialLife = (data: FormData): CategoryScore => {
   };
 };
 
-// Calculate lifestyle score with age considerations
+// Calculate lifestyle score with the new structured options
 const calculateLifestyle = (data: FormData): CategoryScore => {
-  // This is more subjective and based on the lifestyle notes
-  // For now, giving a default middle score if no lifestyle notes provided
-  const hasLifestyleNotes = data.lifestyleNotes && data.lifestyleNotes.trim().length > 10;
-  const notesLength = data.lifestyleNotes ? data.lifestyleNotes.length : 0;
+  // Scoring based on structured lifestyle options
+  let livingSituationScore = 0;
+  switch (data.livingSituation) {
+    case 'own':
+      livingSituationScore = 90;
+      break;
+    case 'renting':
+      livingSituationScore = 70;
+      break;
+    case 'with-parents':
+      livingSituationScore = 30;
+      break;
+    default:
+      livingSituationScore = 50;
+  }
+  
+  // Age adjustment for living situation
+  if (data.age) {
+    if (data.age < 22 && data.livingSituation === 'with-parents') {
+      // Very normal for younger people to live with parents
+      livingSituationScore = 60;
+    } else if (data.age < 25 && data.livingSituation === 'with-parents') {
+      // Still common for this age group
+      livingSituationScore = 50;
+    } else if (data.age > 30 && data.livingSituation === 'with-parents') {
+      // Less common for this age group
+      livingSituationScore = Math.max(10, livingSituationScore - 20);
+    }
+    
+    if (data.age < 25 && data.livingSituation === 'own') {
+      // Very impressive for young people to own
+      livingSituationScore = 95;
+    }
+  }
+  
+  // Exercise frequency score
+  let exerciseScore = 0;
+  switch (data.exerciseFrequency) {
+    case 'daily':
+      exerciseScore = 95;
+      break;
+    case 'frequently':
+      exerciseScore = 85;
+      break;
+    case 'regularly':
+      exerciseScore = 75;
+      break;
+    case 'sometimes':
+      exerciseScore = 60;
+      break;
+    case 'rarely':
+      exerciseScore = 40;
+      break;
+    case 'never':
+      exerciseScore = 20;
+      break;
+    default:
+      exerciseScore = 50;
+  }
+  
+  // Car ownership score
+  let carScore = 0;
+  switch (data.carOwnership) {
+    case 'sports':
+      carScore = 90;
+      break;
+    case 'luxury':
+      carScore = 85;
+      break;
+    case 'standard':
+      carScore = 70;
+      break;
+    case 'economy':
+      carScore = 60;
+      break;
+    case 'none':
+      carScore = 30;
+      break;
+    default:
+      carScore = 50;
+  }
   
   // Age consideration - lifestyle expectations change with age
   let ageAdjustment = 1.0;
@@ -473,17 +559,28 @@ const calculateLifestyle = (data: FormData): CategoryScore => {
     }
   }
   
-  // Simple heuristic - more detailed notes correlate with more developed lifestyle
-  const percentile = hasLifestyleNotes ? 
-    Math.min(40 + Math.floor(notesLength / 10), 90) * ageAdjustment : 
-    50 * ageAdjustment;
+  // Calculate overall percentile with weighted components
+  const percentile = Math.min(99, Math.round(
+    ((livingSituationScore * 0.4) + (exerciseScore * 0.3) + (carScore * 0.3)) * ageAdjustment
+  ));
   
-  const score = percentileToScore(Math.round(percentile));
+  const score = percentileToScore(percentile);
+  
+  let explanation;
+  if (score >= 8) {
+    explanation = "Your lifestyle choices and habits are excellent, placing you at the top tier.";
+  } else if (score >= 6) {
+    explanation = "You maintain an above-average lifestyle with solid life choices.";
+  } else if (score >= 4) {
+    explanation = "Your lifestyle is comparable to the average man.";
+  } else {
+    explanation = "Your lifestyle shows room for improvement in several key areas.";
+  }
   
   return {
     score,
-    percentile: Math.round(percentile),
-    explanation: "Lifestyle score is based on the richness and diversity of your interests and habits.",
+    percentile,
+    explanation,
     levelUpTip: getRandomTip('lifestyle')
   };
 };

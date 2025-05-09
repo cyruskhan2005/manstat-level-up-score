@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, ReactNode } from 'react';
 import { FormData, Results, StepId } from '../types';
 import { QUIZ_STEPS } from '../constants';
@@ -35,8 +34,11 @@ const defaultFormData: FormData = {
   facialAttractiveness: 5,
   styleGrooming: 5,
   
-  // Misc
-  lifestyleNotes: '',
+  // Lifestyle - structured options instead of free text
+  livingSituation: '',
+  exerciseFrequency: '',
+  hobbies: '',
+  carOwnership: '',
 };
 
 interface FormContextType {

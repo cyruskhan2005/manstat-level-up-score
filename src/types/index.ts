@@ -1,4 +1,3 @@
-
 // User form data type definitions
 export type FormData = {
   // Basic Info
@@ -30,8 +29,11 @@ export type FormData = {
   facialAttractiveness: number;
   styleGrooming: number;
   
-  // Misc
-  lifestyleNotes: string;
+  // Lifestyle - updated from free text to structured options
+  livingSituation: string;
+  exerciseFrequency: string;
+  hobbies: string;
+  carOwnership: string;
 };
 
 // Category and score types
