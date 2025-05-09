@@ -2,17 +2,39 @@
 import { FormData, Results, Category, CategoryScore } from "../types";
 import { NATIONAL_AVERAGES, getRandomTip } from "../constants";
 
-// Helper to calculate percentile based on value and average
-const calculatePercentile = (value: number, average: number, isHigherBetter = true): number => {
+// Helper to calculate percentile based on value and average with age adjustment
+const calculatePercentile = (value: number, average: number, isHigherBetter = true, age: number | null = null): number => {
+  // Age adjustment factor
+  let ageMultiplier = 1.0;
+  
+  // Apply age adjustments if age is provided
+  if (age) {
+    if (isHigherBetter) {
+      // For metrics where higher is better (income, strength, etc.)
+      if (age < 25) {
+        ageMultiplier = 1.2; // Younger people get a boost
+      } else if (age > 45) {
+        ageMultiplier = 0.9; // Older people get a slight reduction
+      }
+    } else {
+      // For metrics where lower is better (body fat %)
+      if (age < 25) {
+        ageMultiplier = 0.9; // Younger people expected to have better metrics
+      } else if (age > 45) {
+        ageMultiplier = 1.1; // Older people get some leniency
+      }
+    }
+  }
+
   const ratio = value / average;
   let percentile: number;
   
   if (isHigherBetter) {
     // Higher value is better (income, max lifts, etc.)
-    percentile = Math.min(Math.round((ratio) * 50), 99);
+    percentile = Math.min(Math.round((ratio) * 50 * ageMultiplier), 99);
   } else {
     // Lower value is better (body fat %)
-    percentile = Math.min(Math.round((average / (value || average)) * 50), 99);
+    percentile = Math.min(Math.round((average / (value || average)) * 50 * ageMultiplier), 99);
   }
   
   return Math.max(1, percentile); // Ensure at least 1 percentile
@@ -48,23 +70,73 @@ const calculateBMI = (data: FormData): number | null => {
 };
 
 // Evaluate if BMI is ideal (around 22-26 is considered ideal for many men)
-const evaluateBMI = (bmi: number | null): number => {
+const evaluateBMI = (bmi: number | null, age: number | null): number => {
   if (!bmi) return 50; // Default to average if no BMI
   
+  // Age-adjusted ideal BMI ranges
+  let idealLowerBound = 18.5;
+  let idealUpperBound = 25;
+  
+  // Adjust ideal BMI range based on age
+  if (age) {
+    if (age > 30) {
+      // Small adjustment for 30+
+      idealLowerBound = 19;
+      idealUpperBound = 26;
+    }
+    if (age > 40) {
+      // More adjustment for 40+
+      idealLowerBound = 20;
+      idealUpperBound = 27;
+    }
+    if (age > 50) {
+      // Even more adjustment for 50+
+      idealLowerBound = 21;
+      idealUpperBound = 28;
+    }
+  }
+  
   // BMI ranges and corresponding percentiles
-  if (bmi >= 18.5 && bmi < 25) {
-    // Normal weight - highest score
+  if (bmi >= idealLowerBound && bmi < idealUpperBound) {
+    // Ideal weight - highest score
     return 80;
-  } else if ((bmi >= 17 && bmi < 18.5) || (bmi >= 25 && bmi < 30)) {
+  } else if ((bmi >= idealLowerBound - 1.5 && bmi < idealLowerBound) || 
+             (bmi >= idealUpperBound && bmi < idealUpperBound + 5)) {
     // Slightly under or overweight
     return 60;
-  } else if ((bmi >= 16 && bmi < 17) || (bmi >= 30 && bmi < 35)) {
+  } else if ((bmi >= idealLowerBound - 2.5 && bmi < idealLowerBound - 1.5) || 
+             (bmi >= idealUpperBound + 5 && bmi < idealUpperBound + 10)) {
     // Moderately under or overweight
     return 40;
   } else {
-    // Severely under or overweight
+    // Significantly under or overweight
     return 20;
   }
+};
+
+// Calculate strength percentiles based on age group
+const calculateStrengthPercentile = (lift: number | null, averageLift: number, age: number | null): number => {
+  if (!lift) return 50; // Default to average
+  
+  // Age-based adjustment factor for strength
+  let ageAdjustment = 1.0;
+  
+  if (age) {
+    if (age < 25) {
+      ageAdjustment = 0.9; // Younger men expected to be stronger
+    } else if (age >= 25 && age <= 35) {
+      ageAdjustment = 1.0; // Prime age for strength
+    } else if (age > 35 && age <= 45) {
+      ageAdjustment = 1.1; // Early middle age gets a boost
+    } else if (age > 45 && age <= 55) {
+      ageAdjustment = 1.2; // Middle age gets more boost
+    } else {
+      ageAdjustment = 1.3; // Older men get significant boost
+    }
+  }
+  
+  // Calculate percentile with age adjustment
+  return Math.min(99, Math.round((lift / averageLift) * 50 * ageAdjustment));
 };
 
 // Evaluate age factor (prime age for physical performance is typically 25-35)
@@ -96,7 +168,7 @@ const calculateAttractiveness = (data: FormData): CategoryScore => {
   
   // Calculate BMI influence on attractiveness
   const bmi = calculateBMI(data);
-  const bmiPercentile = evaluateBMI(bmi);
+  const bmiPercentile = evaluateBMI(bmi, data.age);
   
   // Age factor - prime attractiveness age is considered to be 25-35
   const ageFactor = evaluateAgeFactor(data.age);
@@ -125,23 +197,20 @@ const calculateAttractiveness = (data: FormData): CategoryScore => {
   };
 };
 
-// Calculate strength & fitness score
+// Calculate strength & fitness score with enhanced age normalization
 const calculateStrengthFitness = (data: FormData): CategoryScore => {
   // Body composition score (lower body fat % is better)
   const bodyFatPercentile = data.bodyFatPercentage ? 
-    calculatePercentile(data.bodyFatPercentage, NATIONAL_AVERAGES.bodyFatPercentage, false) : 50;
+    calculatePercentile(data.bodyFatPercentage, NATIONAL_AVERAGES.bodyFatPercentage, false, data.age) : 50;
   
-  // Strength scores based on compound lifts
-  const benchPercentile = data.maxBench ? 
-    calculatePercentile(data.maxBench, NATIONAL_AVERAGES.maxBench) : 50;
-  const squatPercentile = data.maxSquat ? 
-    calculatePercentile(data.maxSquat, NATIONAL_AVERAGES.maxSquat) : 50;
-  const deadliftPercentile = data.maxDeadlift ? 
-    calculatePercentile(data.maxDeadlift, NATIONAL_AVERAGES.maxDeadlift) : 50;
+  // Strength scores based on compound lifts with age normalization
+  const benchPercentile = calculateStrengthPercentile(data.maxBench, NATIONAL_AVERAGES.maxBench, data.age);
+  const squatPercentile = calculateStrengthPercentile(data.maxSquat, NATIONAL_AVERAGES.maxSquat, data.age);
+  const deadliftPercentile = calculateStrengthPercentile(data.maxDeadlift, NATIONAL_AVERAGES.maxDeadlift, data.age);
   
-  // BMI influence
+  // BMI influence with age consideration
   const bmi = calculateBMI(data);
-  const bmiPercentile = evaluateBMI(bmi);
+  const bmiPercentile = evaluateBMI(bmi, data.age);
   
   // Age factor - adjust scores based on age (physical prime is typically 25-35)
   const ageFactor = evaluateAgeFactor(data.age);
@@ -172,7 +241,7 @@ const calculateStrengthFitness = (data: FormData): CategoryScore => {
   };
 };
 
-// Calculate income & career score
+// Calculate income & career score with better age normalization
 const calculateIncomeCareer = (data: FormData): CategoryScore => {
   // Education score based on level
   const educationMap: Record<string, number> = {
@@ -186,25 +255,38 @@ const calculateIncomeCareer = (data: FormData): CategoryScore => {
   
   const educationPercentile = educationMap[data.educationLevel] || 50;
   
-  // Income score based on yearly income
-  const incomePercentile = data.yearlyIncome ? 
-    calculatePercentile(data.yearlyIncome, NATIONAL_AVERAGES.yearlyIncome) : 50;
+  // Income score based on yearly income with strong age adjustment
+  let incomePercentile = 50; // Default value
   
-  // Age consideration - income typically increases with age, so younger people get a boost
-  let ageAdjustment = 1.0;
-  if (data.age) {
-    if (data.age < 25) {
-      ageAdjustment = 1.3; // Significant boost for young achievers
-    } else if (data.age < 30) {
-      ageAdjustment = 1.2; // Good boost for under 30
-    } else if (data.age < 40) {
-      ageAdjustment = 1.1; // Slight boost for 30s
+  if (data.yearlyIncome) {
+    // Calculate base percentile
+    const baseIncomePercentile = calculatePercentile(data.yearlyIncome, NATIONAL_AVERAGES.yearlyIncome);
+    
+    // Apply age-specific normalization
+    if (data.age) {
+      if (data.age < 25) {
+        // Young professionals get a significant boost
+        incomePercentile = Math.min(99, Math.round(baseIncomePercentile * 1.5));
+      } else if (data.age < 30) {
+        // Early career professionals get a good boost
+        incomePercentile = Math.min(99, Math.round(baseIncomePercentile * 1.3));
+      } else if (data.age < 40) {
+        // Mid-career professionals get a slight boost
+        incomePercentile = Math.min(99, Math.round(baseIncomePercentile * 1.1));
+      } else if (data.age >= 40 && data.age < 55) {
+        // Peak career age - no adjustment
+        incomePercentile = baseIncomePercentile;
+      } else {
+        // Near retirement age - slight negative adjustment
+        incomePercentile = Math.round(baseIncomePercentile * 0.9);
+      }
+    } else {
+      incomePercentile = baseIncomePercentile;
     }
-    // No adjustment for 40+ as that's when income is expected to be higher
   }
   
   // Average percentile across career metrics with age adjustment
-  const avgPercentile = Math.min(99, Math.round(((educationPercentile + incomePercentile) / 2) * ageAdjustment));
+  const avgPercentile = Math.min(99, Math.round((educationPercentile + incomePercentile) / 2));
   
   const score = percentileToScore(avgPercentile);
   
@@ -227,7 +309,7 @@ const calculateIncomeCareer = (data: FormData): CategoryScore => {
   };
 };
 
-// Calculate relationship & dating score
+// Calculate relationship & dating score with better age normalization
 const calculateRelationshipDating = (data: FormData): CategoryScore => {
   // Relationship status score
   const relationshipMap: Record<string, number> = {
@@ -239,24 +321,44 @@ const calculateRelationshipDating = (data: FormData): CategoryScore => {
   
   const relationshipPercentile = relationshipMap[data.relationshipStatus] || 50;
   
-  // Dating history score
-  const experiencePercentile = data.womenSleptWith ? 
-    calculatePercentile(data.womenSleptWith, NATIONAL_AVERAGES.womenSleptWith) : 50;
+  // Dating history score with age normalization
+  let experiencePercentile = 50; // Default value
   
-  // Age consideration - expectations of relationship status change with age
-  let ageAdjustment = 1.0;
+  if (data.womenSleptWith !== null) {
+    // Base calculation
+    const baseExperiencePercentile = calculatePercentile(data.womenSleptWith, NATIONAL_AVERAGES.womenSleptWith);
+    
+    // Apply age normalization
+    if (data.age) {
+      if (data.age < 25) {
+        // Younger men - higher expectations for fewer partners
+        experiencePercentile = baseExperiencePercentile * 1.2;
+      } else if (data.age >= 25 && data.age < 40) {
+        // Prime dating age - neutral
+        experiencePercentile = baseExperiencePercentile;
+      } else {
+        // Older men - lower expectations for more partners
+        experiencePercentile = baseExperiencePercentile * 0.9;
+      }
+    } else {
+      experiencePercentile = baseExperiencePercentile;
+    }
+  }
+  
+  // Age consideration for relationship status
+  let relationshipAgeFactor = 1.0;
   if (data.age) {
     if (data.age < 25) {
       // Less expectation to be in serious relationships when younger
-      ageAdjustment = 1.2;
+      relationshipAgeFactor = 1.2;
     } else if (data.age > 35 && data.relationshipStatus === 'Single') {
       // Higher expectation to be in relationships when older
-      ageAdjustment = 0.8;
+      relationshipAgeFactor = 0.8;
     }
   }
   
   // Combined score with relationship status weighted more, adjusted for age
-  const avgPercentile = Math.round(((relationshipPercentile * 0.7) + (experiencePercentile * 0.3)) * ageAdjustment);
+  const avgPercentile = Math.round(((relationshipPercentile * 0.7 * relationshipAgeFactor) + (experiencePercentile * 0.3)));
   
   const score = percentileToScore(avgPercentile);
   
@@ -279,30 +381,54 @@ const calculateRelationshipDating = (data: FormData): CategoryScore => {
   };
 };
 
-// Calculate social life score
+// Calculate social life score with better age normalization
 const calculateSocialLife = (data: FormData): CategoryScore => {
-  // Friends score
-  const friendsPercentile = data.closeFreinds ? 
-    calculatePercentile(data.closeFreinds, NATIONAL_AVERAGES.closeFreinds) : 50;
+  // Friends score with age normalization
+  let friendsPercentile = 50;
+  if (data.closeFreinds !== null) {
+    // Base calculation
+    const baseFriendsPercentile = calculatePercentile(data.closeFreinds, NATIONAL_AVERAGES.closeFreinds);
+    
+    // Apply age normalization
+    if (data.age) {
+      if (data.age < 25) {
+        // Higher social expectations for younger men
+        friendsPercentile = Math.round(baseFriendsPercentile * 0.9);
+      } else if (data.age > 40) {
+        // Lower social expectations for older men
+        friendsPercentile = Math.round(baseFriendsPercentile * 1.2);
+      } else {
+        friendsPercentile = baseFriendsPercentile;
+      }
+    } else {
+      friendsPercentile = baseFriendsPercentile;
+    }
+  }
   
-  // Social activity score
-  const eventsPercentile = data.socialEventsPerMonth ? 
-    calculatePercentile(data.socialEventsPerMonth, NATIONAL_AVERAGES.socialEventsPerMonth) : 50;
-  
-  // Age consideration - social expectations vary by age
-  let ageAdjustment = 1.0;
-  if (data.age) {
-    if (data.age < 25) {
-      // Higher social expectations for younger men
-      ageAdjustment = 0.9;
-    } else if (data.age > 40) {
-      // Lower social expectations for older men
-      ageAdjustment = 1.1;
+  // Social activity score with age normalization
+  let eventsPercentile = 50;
+  if (data.socialEventsPerMonth !== null) {
+    // Base calculation
+    const baseEventsPercentile = calculatePercentile(data.socialEventsPerMonth, NATIONAL_AVERAGES.socialEventsPerMonth);
+    
+    // Apply age normalization
+    if (data.age) {
+      if (data.age < 25) {
+        // Higher social activity expectations for younger men
+        eventsPercentile = Math.round(baseEventsPercentile * 0.9);
+      } else if (data.age > 40) {
+        // Lower social activity expectations for older men
+        eventsPercentile = Math.round(baseEventsPercentile * 1.2);
+      } else {
+        eventsPercentile = baseEventsPercentile;
+      }
+    } else {
+      eventsPercentile = baseEventsPercentile;
     }
   }
   
   // Average percentile across social metrics
-  const avgPercentile = Math.round(((friendsPercentile + eventsPercentile) / 2) * ageAdjustment);
+  const avgPercentile = Math.round((friendsPercentile + eventsPercentile) / 2);
   
   const score = percentileToScore(avgPercentile);
   
@@ -325,7 +451,7 @@ const calculateSocialLife = (data: FormData): CategoryScore => {
   };
 };
 
-// Calculate lifestyle score - more subjective based on notes
+// Calculate lifestyle score with age considerations
 const calculateLifestyle = (data: FormData): CategoryScore => {
   // This is more subjective and based on the lifestyle notes
   // For now, giving a default middle score if no lifestyle notes provided
@@ -338,6 +464,9 @@ const calculateLifestyle = (data: FormData): CategoryScore => {
     if (data.age < 25) {
       // Less expectation for an established lifestyle when younger
       ageAdjustment = 1.2;
+    } else if (data.age < 30) {
+      // Some lifestyle expectations
+      ageAdjustment = 1.1;
     } else if (data.age > 40) {
       // Higher expectation for an established lifestyle when older
       ageAdjustment = 0.9;
