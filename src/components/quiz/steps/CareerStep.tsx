@@ -14,6 +14,7 @@ import {
 const EDUCATION_LEVELS = [
   'High School',
   'Some College',
+  'In College',
   'Associate Degree',
   'Bachelor\'s Degree',
   'Master\'s Degree',
