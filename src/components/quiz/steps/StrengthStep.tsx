@@ -3,6 +3,8 @@ import React from 'react';
 import { useFormContext } from '@/context/FormContext';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { InfoIcon } from 'lucide-react';
 
 const StrengthStep: React.FC = () => {
   const { formData, updateField } = useFormContext();
@@ -22,12 +24,39 @@ const StrengthStep: React.FC = () => {
     updateField('maxDeadlift', value);
   };
   
+  // Check if user has entered height and weight data to provide relative analysis
+  const hasHeightWeight = (
+    (formData.height.feet && formData.height.inches) || 
+    formData.height.cm
+  ) && (
+    formData.weight.lbs || 
+    formData.weight.kg
+  );
+  
   return (
     <div className="space-y-6">
       <div>
         <h2 className="text-2xl font-bold gradient-heading mb-2">Strength Stats</h2>
         <p className="text-muted-foreground">Enter your one-rep max lifts (in pounds).</p>
       </div>
+      
+      {hasHeightWeight && (
+        <Alert className="bg-blue-50 border-blue-200">
+          <InfoIcon className="h-4 w-4 text-blue-500" />
+          <AlertDescription className="text-blue-700">
+            Your strength will be evaluated relative to your body height and weight for more accurate scoring.
+          </AlertDescription>
+        </Alert>
+      )}
+      
+      {!hasHeightWeight && (
+        <Alert className="bg-amber-50 border-amber-200">
+          <InfoIcon className="h-4 w-4 text-amber-500" />
+          <AlertDescription className="text-amber-700">
+            For more accurate strength scoring, please go back and complete your height and weight information.
+          </AlertDescription>
+        </Alert>
+      )}
       
       <div className="space-y-4">
         <div className="space-y-2">

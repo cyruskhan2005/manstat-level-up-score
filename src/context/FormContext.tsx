@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useState, ReactNode } from 'react';
 import { FormData, Results, StepId } from '../types';
 import { QUIZ_STEPS } from '../constants';
@@ -34,10 +35,10 @@ const defaultFormData: FormData = {
   facialAttractiveness: 5,
   styleGrooming: 5,
   
-  // Lifestyle - structured options instead of free text
+  // Lifestyle - initialized as empty array for hobbies
   livingSituation: '',
   exerciseFrequency: '',
-  hobbies: '',
+  hobbies: [],
   carOwnership: '',
 };
 

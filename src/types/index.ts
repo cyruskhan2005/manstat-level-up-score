@@ -1,3 +1,4 @@
+
 // User form data type definitions
 export type FormData = {
   // Basic Info
@@ -29,10 +30,10 @@ export type FormData = {
   facialAttractiveness: number;
   styleGrooming: number;
   
-  // Lifestyle - updated from free text to structured options
+  // Lifestyle - updated to include ranked hobbies
   livingSituation: string;
   exerciseFrequency: string;
-  hobbies: string;
+  hobbies: string[]; // Array of top 3 hobbies instead of single string
   carOwnership: string;
 };
 
@@ -75,4 +76,11 @@ export type Step = {
   id: StepId;
   title: string;
   description: string;
+};
+
+// Hobby type with quality rating for scoring
+export type HobbyOption = {
+  id: string;
+  label: string;
+  quality: 'excellent' | 'good' | 'neutral' | 'poor';
 };

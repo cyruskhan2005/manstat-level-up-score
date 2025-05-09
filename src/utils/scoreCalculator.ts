@@ -1,4 +1,4 @@
-import { FormData, Results, Category, CategoryScore } from "../types";
+import { FormData, Results, Category, CategoryScore, HobbyOption } from "../types";
 import { NATIONAL_AVERAGES, getRandomTip } from "../constants";
 
 // Helper to calculate percentile based on value and average with age adjustment
@@ -68,6 +68,45 @@ const calculateBMI = (data: FormData): number | null => {
   return null;
 };
 
+// Get weight in kg regardless of input unit
+const getWeightInKg = (data: FormData): number | null => {
+  if (data.weight.kg) {
+    return data.weight.kg;
+  } else if (data.weight.lbs) {
+    // Convert pounds to kg: 1 lb = 0.453592 kg
+    return data.weight.lbs * 0.453592;
+  }
+  return null;
+};
+
+// Calculate strength-to-weight ratio with height consideration
+const calculateStrengthToWeightRatio = (liftWeight: number | null, bodyWeightKg: number | null, heightCm: number | null): number => {
+  if (!liftWeight || !bodyWeightKg) return 0;
+  
+  // Basic strength-to-weight ratio
+  let ratio = liftWeight / (bodyWeightKg * 2.20462); // Convert kg to lbs for calculation
+  
+  // Apply height adjustment - taller people have mechanical disadvantage in lifting
+  if (heightCm) {
+    // Normalize height around 175cm (average male height)
+    const heightFactor = Math.pow(175 / heightCm, 0.5);
+    ratio = ratio * heightFactor;
+  }
+  
+  return ratio;
+};
+
+// Get height in cm regardless of input unit
+const getHeightInCm = (data: FormData): number | null => {
+  if (data.height.cm) {
+    return data.height.cm;
+  } else if (data.height.feet && data.height.inches) {
+    // Convert feet/inches to cm: 1 foot = 30.48 cm, 1 inch = 2.54 cm
+    return (data.height.feet * 30.48) + (data.height.inches * 2.54);
+  }
+  return null;
+};
+
 // Evaluate if BMI is ideal (around 22-26 is considered ideal for many men)
 const evaluateBMI = (bmi: number | null, age: number | null): number => {
   if (!bmi) return 50; // Default to average if no BMI
@@ -113,8 +152,8 @@ const evaluateBMI = (bmi: number | null, age: number | null): number => {
   }
 };
 
-// Calculate strength percentiles based on age group
-const calculateStrengthPercentile = (lift: number | null, averageLift: number, age: number | null): number => {
+// Calculate strength percentiles based on height, weight, and age
+const calculateStrengthPercentile = (lift: number | null, averageLift: number, bodyWeightKg: number | null, heightCm: number | null, age: number | null): number => {
   if (!lift) return 50; // Default to average
   
   // Age-based adjustment factor for strength
@@ -134,7 +173,16 @@ const calculateStrengthPercentile = (lift: number | null, averageLift: number, a
     }
   }
   
-  // Calculate percentile with age adjustment
+  // Instead of raw lift comparison, use strength-to-weight ratio with height consideration
+  if (bodyWeightKg && heightCm) {
+    const liftRatio = calculateStrengthToWeightRatio(lift, bodyWeightKg, heightCm);
+    const averageRatio = calculateStrengthToWeightRatio(averageLift, 80, 175); // Assumed average man
+    
+    // Compare ratios instead of absolute values
+    return Math.min(99, Math.round((liftRatio / (averageRatio || 1)) * 50 * ageAdjustment));
+  }
+  
+  // Fallback to standard calculation if missing data
   return Math.min(99, Math.round((lift / averageLift) * 50 * ageAdjustment));
 };
 
@@ -196,16 +244,40 @@ const calculateAttractiveness = (data: FormData): CategoryScore => {
   };
 };
 
-// Calculate strength & fitness score with enhanced age normalization
+// Calculate strength & fitness score with enhanced height/weight normalization
 const calculateStrengthFitness = (data: FormData): CategoryScore => {
   // Body composition score (lower body fat % is better)
   const bodyFatPercentile = data.bodyFatPercentage ? 
     calculatePercentile(data.bodyFatPercentage, NATIONAL_AVERAGES.bodyFatPercentage, false, data.age) : 50;
   
-  // Strength scores based on compound lifts with age normalization
-  const benchPercentile = calculateStrengthPercentile(data.maxBench, NATIONAL_AVERAGES.maxBench, data.age);
-  const squatPercentile = calculateStrengthPercentile(data.maxSquat, NATIONAL_AVERAGES.maxSquat, data.age);
-  const deadliftPercentile = calculateStrengthPercentile(data.maxDeadlift, NATIONAL_AVERAGES.maxDeadlift, data.age);
+  // Get height and weight in consistent units for calculations
+  const heightCm = getHeightInCm(data);
+  const weightKg = getWeightInKg(data);
+  
+  // Strength scores based on compound lifts with height/weight normalization
+  const benchPercentile = calculateStrengthPercentile(
+    data.maxBench, 
+    NATIONAL_AVERAGES.maxBench, 
+    weightKg, 
+    heightCm, 
+    data.age
+  );
+  
+  const squatPercentile = calculateStrengthPercentile(
+    data.maxSquat, 
+    NATIONAL_AVERAGES.maxSquat, 
+    weightKg, 
+    heightCm, 
+    data.age
+  );
+  
+  const deadliftPercentile = calculateStrengthPercentile(
+    data.maxDeadlift, 
+    NATIONAL_AVERAGES.maxDeadlift, 
+    weightKg, 
+    heightCm, 
+    data.age
+  );
   
   // BMI influence with age consideration
   const bmi = calculateBMI(data);
@@ -460,6 +532,52 @@ const calculateSocialLife = (data: FormData): CategoryScore => {
   };
 };
 
+// Calculate hobby quality score based on selected hobbies
+const calculateHobbyQualityScore = (hobbies: string[]): number => {
+  if (!hobbies.length) return 50; // Default average score
+  
+  const HOBBY_QUALITY_MAP: Record<string, number> = {
+    // Excellent hobbies (active, social, skill-building)
+    'sports': 90,
+    'fitness': 95,
+    'martial-arts': 95,
+    
+    // Good hobbies (intellectual, creative, outdoor)
+    'reading': 80,
+    'travel': 85,
+    'arts': 75,
+    'outdoors': 85,
+    'cooking': 75,
+    'social': 80,
+    'investing': 80,
+    'meditation': 85,
+    'writing': 75,
+    
+    // Neutral hobbies (passive or individual)
+    'tech': 65,
+    'photography': 65,
+    'collecting': 55,
+    
+    // Poor hobbies (sedentary, isolated, low-skill)
+    'gaming': 30,
+    'watching-tv': 20,
+    'social-media': 15
+  };
+  
+  // Calculate average quality score for selected hobbies
+  let totalScore = 0;
+  let validHobbies = 0;
+  
+  for (const hobby of hobbies) {
+    if (HOBBY_QUALITY_MAP[hobby]) {
+      totalScore += HOBBY_QUALITY_MAP[hobby];
+      validHobbies++;
+    }
+  }
+  
+  return validHobbies > 0 ? totalScore / validHobbies : 50;
+};
+
 // Calculate lifestyle score with the new structured options
 const calculateLifestyle = (data: FormData): CategoryScore => {
   // Scoring based on structured lifestyle options
@@ -522,6 +640,9 @@ const calculateLifestyle = (data: FormData): CategoryScore => {
       exerciseScore = 50;
   }
   
+  // Hobby quality score - now based on hobby ratings
+  const hobbyScore = calculateHobbyQualityScore(data.hobbies);
+  
   // Car ownership score
   let carScore = 0;
   switch (data.carOwnership) {
@@ -561,7 +682,7 @@ const calculateLifestyle = (data: FormData): CategoryScore => {
   
   // Calculate overall percentile with weighted components
   const percentile = Math.min(99, Math.round(
-    ((livingSituationScore * 0.4) + (exerciseScore * 0.3) + (carScore * 0.3)) * ageAdjustment
+    ((livingSituationScore * 0.25) + (exerciseScore * 0.25) + (hobbyScore * 0.3) + (carScore * 0.2)) * ageAdjustment
   ));
   
   const score = percentileToScore(percentile);
